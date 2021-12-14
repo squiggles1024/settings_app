@@ -1,5 +1,14 @@
+from serial.serialutil import EIGHTBITS, PARITY_NAMES, PARITY_NONE, STOPBITS_ONE
 import usb.core
 import usb.util
+import serial
+import time
+usleep = lambda x: time.sleep(x/1000000.0)
+
+MOUSE_PID = 0x572b
+MOUSE_VID = 0x0483
+SERIAL_PID = 0x5930
+SERIAL_VID = 0x0483
 
 KEY_A=0x04
 KEY_B=0x05
@@ -161,15 +170,32 @@ LED_RED = 0
 LED_GREEN = 0
 LED_BLUE = 255
 ########################################### MODIFY ABOVE CODE HERE ###########################################
-
+START_SIGNAL = [0x0D, 0xD0,0xC0, 0x7A,0x0D, 0xD0, 0xC0, 0x7A]
+c_array_start = bytearray(START_SIGNAL)
+STOP_SIGNAL = [0xFE, 0xCA, 0xC0, 0x7A, 0xFE, 0xCA, 0xC0, 0x7A]
+c_array_stop = bytearray(STOP_SIGNAL)
 DPI_HIBYTE = DPI >> 8
 DPI_LOBYTE = DPI & 0x00FF
 settings = [MOUSE00,MOUSE01,MOUSE02,MOUSE03,MOUSE04,MOUSE05,MOUSE06,MOUSE07,MOUSE08,MOUSE09,MOUSE10,MOUSE11,MOUSE12,MOUSE13,MOUSE14,MOUSE15,MOUSE16,MOUSE17,MOUSE18,MOUSE19,MOUSEL,MOUSER,DPI_LOBYTE,DPI_HIBYTE,LED_MODE,LED_PULSE_LENGTH,LED_RED,LED_GREEN,LED_BLUE]
 c_array_settings = bytearray(settings)
 
-dev = usb.core.find(idVendor=0x0483, idProduct=0x572b)
-
+dev = usb.core.find(idVendor=MOUSE_VID, idProduct=MOUSE_PID)
 if dev is None:
-    raise ValueError('Device not found')
-#3 parameter = Endpoint 3
-dev.write(3,c_array_settings)
+    dev = usb.core.find(idVendor=SERIAL_VID, idProduct=SERIAL_PID)
+    if dev is None:
+        raise ValueError('Device not found')
+    comm_port = serial.Serial(port='COM11', baudrate=115200, bytesize=EIGHTBITS, parity = PARITY_NONE, stopbits = STOPBITS_ONE, timeout=None, rtscts = False, xonxoff = False, dsrdtr = False)
+    comm_port.write(c_array_start)
+    usleep(100)
+    app = open("bootloader.bin","rb")
+    word = app.read(4)
+    while word:
+        #print(word)
+        comm_port.write(bytearray(word))
+        word = app.read(4)
+        usleep(100)
+    comm_port.write(c_array_stop)
+
+else: 
+    #3 parameter = Endpoint 3
+    dev.write(3,c_array_settings)
